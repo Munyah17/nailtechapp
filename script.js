@@ -49,12 +49,17 @@ maxDate.setDate(maxDate.getDate() + CONFIG.horizonDays);
 dateInput.max = toISODate(maxDate);
 
 // Booked slots come from the server (shared across all clients).
-// localStorage acts as a fallback when the PHP backend isn't reachable.
+// Tries the Vercel API first, then the cPanel PHP endpoint;
+// localStorage is the fallback when neither is reachable.
 const serverBooked = new Set();
-fetch("booking.php?slots=1")
-  .then((r) => r.json())
-  .then((slots) => slots.forEach((s) => serverBooked.add(s)))
-  .catch(() => {}); // static preview — no PHP; localStorage still applies
+(async () => {
+  for (const url of ["api/booking", "booking.php?slots=1"]) {
+    try {
+      const slots = await (await fetch(url)).json();
+      if (Array.isArray(slots)) return slots.forEach((s) => serverBooked.add(s));
+    } catch (_) {}
+  }
+})();
 
 const takenKey = (date, time) => `slot:${date}:${time}`;
 const isTaken = (date, time) =>
@@ -138,24 +143,50 @@ form.addEventListener("submit", async (e) => {
   btn.disabled = true;
   btn.textContent = "Submitting…";
 
-  const body = new FormData(form);
-  body.set("ajax", "1");
+  // PoP screenshot → base64 data URL for the serverless API.
+  const popFile = form.elements.pop?.files?.[0];
+  const popData = popFile
+    ? await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(fr.result);
+        fr.onerror = rej;
+        fr.readAsDataURL(popFile);
+      })
+    : null;
 
-  let ok = false;
+  // Try the Vercel serverless API first; fall back to the cPanel PHP endpoint.
+  let json = null;
   try {
-    const res = await fetch("booking.php", { method: "POST", body });
-    const json = res.ok ? await res.json() : { ok: false };
-    ok = json.ok;
-    if (!ok && json.error) {
-      // e.g. slot just got taken — tell the client and let them retry
-      alert(json.error);
+    const r = await fetch("api/booking", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...data, pop: popData ? { data: popData } : null }),
+    });
+    if (r.status !== 404) json = await r.json();
+  } catch (_) {}
+
+  if (!json) {
+    const body = new FormData(form);
+    body.set("ajax", "1");
+    try {
+      const r = await fetch("booking.php", { method: "POST", body });
+      json = await r.json();
+    } catch (_) {
+      // Both backends unreachable — WhatsApp fallback still delivers the booking.
+    }
+  }
+
+  if (json && !json.ok) {
+    if (json.error) alert(json.error);
+    if (json.conflict) {
+      // Slot just got taken — refresh options and let the client retry.
       btn.disabled = false;
       btn.textContent = "Submit Booking";
-      dateInput.dispatchEvent(new Event("change")); // refresh slots
+      dateInput.dispatchEvent(new Event("change"));
       return;
     }
-  } catch (_) {
-    // PHP unreachable (e.g. static preview) — WhatsApp is the fallback channel.
+    // Email send failed — continue to the success screen anyway so the
+    // client can use the WhatsApp fallback button.
   }
 
   // Reserve the slot locally so it shows as booked next time.

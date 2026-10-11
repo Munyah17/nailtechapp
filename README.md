@@ -4,6 +4,27 @@ Minimal one-page site for a nail & beauty technician with a booking system.
 Static front end (HTML/CSS/JS) + one small PHP file for email and slot storage.
 Designed for standard cPanel shared hosting — no frameworks, no build step.
 
+## Deploy (Vercel)
+
+The repo deploys as-is — `api/booking.js` is auto-detected as a serverless
+function (`/api/booking`). PHP does **not** run on Vercel; the site uses the
+API function first and falls back to `booking.php` on cPanel.
+
+Required env vars (Vercel → Settings → Environment Variables):
+
+| Var | Purpose |
+|-----|---------|
+| `RESEND_API_KEY` | Email delivery — free key from [resend.com](https://resend.com) |
+| `TECH_EMAIL` | Nail tech's inbox for bookings |
+| `FROM_EMAIL` | Verified sender, e.g. `Bookings <book@yourdomain.com>` |
+
+Optional: add **Vercel KV** (Storage tab) for cross-device slot blocking —
+`KV_REST_API_URL` / `KV_REST_API_TOKEN` are set automatically.
+
+Note: the default Resend sender `onboarding@resend.dev` only delivers to your
+own Resend account email. Verify a domain (or use `book@yourdomain.com`) for
+production delivery.
+
 ## Deploy (cPanel)
 
 1. In cPanel → **File Manager**, upload all files to `public_html/`
