@@ -1,0 +1,12 @@
+---
+# cPanel Git™ Version Control deployment.
+# Replace CPANELUSER with your cPanel username, then "Deploy HEAD Commit"
+# from cPanel → Git Version Control.
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/CPANELUSER/public_html/
+    - /bin/cp index.html $DEPLOYPATH
+    - /bin/cp styles.css $DEPLOYPATH
+    - /bin/cp script.js $DEPLOYPATH
+    - /bin/cp booking.php $DEPLOYPATH
+    - /bin/cp .htaccess $DEPLOYPATH
